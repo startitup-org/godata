@@ -1,4 +1,4 @@
-package data
+package godata
 
 import (
 	"database/sql"
