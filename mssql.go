@@ -31,6 +31,8 @@ type SpCallLog struct {
 	DurationEx     float64   `json:"durationEx"`
 	ErrorCode      int       `json:"errorCode"`
 	ErrorMessage   string    `json:"errorMessage"`
+	ExErrorCode    int       `json:"exErrorCode"`
+	ExErrorMessage string    `json:"exErrorMessage"`
 	Server         string    `json:"server"`
 }
 
@@ -76,7 +78,7 @@ func (db *MsSQL) CallSp(spName string, params string) (string, SpCallLog) {
 		DurationEx:  durationEx,
 		Server:      hostname,
 	}
-	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage)
+	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
 	if err != nil {
 		fmt.Println(err)
 	} else {
