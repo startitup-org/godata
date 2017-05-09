@@ -80,7 +80,7 @@ func (db *MsSQL) CallSp(spName string, params string) (string, SpCallLog) {
 	}
 	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("row.Scan error:", err)
 	} else {
 		//fmt.Println("l:", l)
 		go db.LogSpCall(l)
