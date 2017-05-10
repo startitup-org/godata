@@ -63,14 +63,14 @@ func (db *MsSQL) Close() {
 	}
 }
 
-func (db *MsSQL) CallSp(spName string, params string) (string, SpCallLog) {
+func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 	//fmt.Printf("EXEC %s '%s'\n", spName, params)
 	tm0 := time.Now()
 	row := db.appDb.QueryRow("EXEC CallSp ?1, ?2", spName, params)
 	durationEx := time.Since(tm0).Seconds() * 1000 //in ms
 
 	//fmt.Println(row)
-	var result string
+	var result []byte
 	l := SpCallLog{
 		SpCallLogId: uuid.NewV4(),
 		SpName:      spName,
@@ -83,16 +83,16 @@ func (db *MsSQL) CallSp(spName string, params string) (string, SpCallLog) {
 		fmt.Println("row.Scan error:", err)
 	} else {
 		//fmt.Println("l:", l)
-		go db.LogSpCall(l)
+		go db.logSpCall(l)
 	}
 	return result, l
 }
 
-func (db *MsSQL) LogSpCall(l SpCallLog) {
+func (db *MsSQL) logSpCall(l SpCallLog) {
 	lj, err := json.Marshal(l)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	db.logsDb.QueryRow("EXEC LogSpCall ?", string(lj))
+	db.logsDb.QueryRow("EXEC LogSpCall ?", lj)
 }
