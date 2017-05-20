@@ -34,6 +34,28 @@ type SpCallLog struct {
 	ExErrorCode    int       `json:"exErrorCode"`
 	ExErrorMessage string    `json:"exErrorMessage"`
 	Server         string    `json:"server"`
+	CreatedDT      time.Time `json:"createdDT"`
+}
+
+type ApiAccessLog struct {
+	ApiAccessLogId uuid.UUID `json:"apiAccessLogId"`
+	ApiSessionId   uuid.UUID `json:"apiSessionId"`
+	Route          string    `json:"route"`
+	Source         string    `json:"source"`
+	UserId         uuid.UUID `json:"userId"`
+	IPAddress      string    `json:"ipAddress"`
+	UserAgent      string    `json:"userAgent"`
+	Method         string    `json:"method"`
+	Url            string    `json:"url"`
+	Headers        string    `json:"headers"`
+	Payload        string    `json:"payload"`
+	Response       string    `json:"response"`
+	ReasonPhrase   string    `json:"reasonPhrase"`
+	StatusCode     int       `json:"statusCode"`
+	Duration       float64   `json:"duration"`
+	Domain         string    `json:"domain"`
+	Server         string    `json:"server"`
+	CreatedDT      time.Time `json:"createdDT"`
 }
 
 var hostname string
@@ -77,6 +99,7 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 		Params:      params,
 		DurationEx:  durationEx,
 		Server:      hostname,
+		CreatedDT:   tm0,
 	}
 	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
 	if err != nil {
@@ -89,10 +112,34 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 }
 
 func (db *MsSQL) logSpCall(l SpCallLog) {
+	var errCode int
+	var errMsg string
+
 	lj, err := json.Marshal(l)
 	if err != nil {
 		fmt.Println(err)
 	}
+	//fmt.Printf("logSpCall IN: %s\n", lj)
 
-	db.logsDb.QueryRow("EXEC LogSpCall ?", lj)
+	err = db.logsDb.QueryRow("EXEC LogSpCall ?", string(lj)).Scan(&errCode, &errMsg)
+	if err != nil {
+		fmt.Printf("logSpCall RES: %s, %d, %s\n", err, errCode, errMsg)
+	}
+}
+
+func (db *MsSQL) LogApiAccess(l ApiAccessLog) {
+	var errCode int
+	var errMsg string
+
+	l.Duration = time.Since(l.CreatedDT).Seconds() * 1000 //in ms
+	lj, err := json.Marshal(l)
+	if err != nil {
+		fmt.Println(err)
+	}
+	//fmt.Printf("LogApiAccess IN: %s\n", lj)
+
+	err = db.logsDb.QueryRow("EXEC LogApiAccess ?", string(lj)).Scan(&errCode, &errMsg)
+	if err != nil {
+		fmt.Printf("LogApiAccess RES: %s, %d, %s\n", err, errCode, errMsg)
+	}
 }
