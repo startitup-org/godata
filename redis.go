@@ -13,6 +13,7 @@ type ChatMessage struct {
 	Name      string    `json:"name"`
 	Message   string    `json:"msg"`
 	SocketId  string    `json:"sid,omitempty"`
+	Hostname  string    `json:"host,omitempty"`
 	Timestamp time.Time `json:"tm,omitempty"`
 }
 
