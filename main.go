@@ -1,3 +1,3 @@
 package godata
 
-var Version string = "1.0.4"
+var Version string = "1.0.5"
