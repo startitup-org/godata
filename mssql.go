@@ -99,7 +99,7 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 		Params:      params,
 		DurationEx:  durationEx,
 		Server:      hostname,
-		CreatedDT:   tm0,
+		CreatedDT:   tm0.UTC(),
 	}
 	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
 	if err != nil {
