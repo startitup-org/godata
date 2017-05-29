@@ -8,13 +8,20 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
+type ChatAddress struct {
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+}
+
 type ChatMessage struct {
-	Reply     string    `json:"reply,omitempty"`
-	Name      string    `json:"name"`
-	Message   string    `json:"msg"`
-	SocketId  string    `json:"sid,omitempty"`
-	Hostname  string    `json:"host,omitempty"`
-	Timestamp time.Time `json:"tm,omitempty"`
+	Source      ChatAddress `json:"source"`
+	Destination ChatAddress `json:"destination"`
+	Message     string      `json:"msg"`
+	Reply       string      `json:"reply,omitempty"`
+	SocketId    string      `json:"sid,omitempty"`
+	Hostname    string      `json:"host,omitempty"`
+	Timestamp   time.Time   `json:"tm,omitempty"`
 }
 
 type PubSubMessage struct {
@@ -44,10 +51,19 @@ type Redis struct { //
 	conns   *redis.Pool
 }
 
+const (
+	ChatChannel  = "startitup:chat"
+	EventChannel = "startitup:event"
+)
+
 func NewRedis(h RedisMessageHandler, maxIdle int, address, password string) *Redis {
 	db := Redis{h, redisNewPool(maxIdle, address, password)}
 	fmt.Println("new Redis ready, conns", db.conns.ActiveCount())
 	return &db
+}
+
+func (db *Redis) Conns() *redis.Pool {
+	return db.conns
 }
 
 func (db *Redis) Publish(channel string, msg *PubSubMessage) {
@@ -80,7 +96,7 @@ func (db *Redis) MutliExec(cmds RedisCommands) (reply interface{}, err error) {
 
 func (db *Redis) Run() {
 	method := "Redis.Run"
-	channels := []string{"startitup:event", "startitup:chat"}
+	channels := []string{EventChannel, ChatChannel}
 	fmt.Println(method, "begin:")
 
 	c := db.conns.Get()
@@ -96,19 +112,12 @@ func (db *Redis) Run() {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
 			//fmt.Printf("%s:message: %s: %s\n", method, v.Channel, v.Data)
-			if v.Channel == "startitup:chat" {
+			switch v.Channel {
+			case EventChannel, ChatChannel:
 				msg := &PubSubMessage{}
 				err := json.Unmarshal(v.Data, msg)
-				redisErrorHandler("Redis.EventLoop:json.Unmarshal", err)
+				redisErrorHandler("Redis.Run:json.Unmarshal", err)
 				db.handler.HandleMessage(v.Channel, msg)
-				//fmt.Printf("got msg %s:%v, err:%v\n", v.Data, msg, err)
-				// if msg.Event == "message" {
-				//  msg.Data.Reply = msg.Data.Name
-				//  msg.Data.Name = "Jit Lee"
-				//  msg.Data.Message = "you say: " + msg.Data.Message
-				//  msg.Data.Timestamp = time.Now().UTC()
-				//  db.Publish("ji-core:chat-reply", msg)
-				// }
 			}
 		case redis.Subscription:
 			fmt.Printf("%s:subscription: %s: %s %d\n", method, v.Channel, v.Kind, v.Count)
