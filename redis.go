@@ -1,33 +1,11 @@
 package godata
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
 )
-
-type ChatAddress struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-}
-
-type ChatMessage struct {
-	Source      ChatAddress `json:"source"`
-	Destination ChatAddress `json:"destination"`
-	Message     string      `json:"msg"`
-	Reply       string      `json:"reply,omitempty"`
-	SocketId    string      `json:"sid,omitempty"`
-	Hostname    string      `json:"host,omitempty"`
-	Timestamp   time.Time   `json:"tm,omitempty"`
-}
-
-type PubSubMessage struct {
-	Event string      `json:"event"`
-	Data  ChatMessage `json:"data,omitempy"`
-}
 
 type RedisCommand struct {
 	cmd  string
@@ -43,18 +21,14 @@ func (r *RedisCommands) Add(cmd string, key string, args ...interface{}) *RedisC
 }
 
 type RedisMessageHandler interface {
-	HandleMessage(channel string, msg *PubSubMessage)
+	Channels() map[string]struct{}
+	HandleMessage(channel string, msg []byte)
 }
 
 type Redis struct { //
 	handler RedisMessageHandler
 	conns   *redis.Pool
 }
-
-const (
-	ChatChannel  = "startitup:chat"
-	EventChannel = "startitup:event"
-)
 
 func NewRedis(h RedisMessageHandler, maxIdle int, address, password string) *Redis {
 	db := Redis{h, redisNewPool(maxIdle, address, password)}
@@ -66,10 +40,8 @@ func (db *Redis) Conns() *redis.Pool {
 	return db.conns
 }
 
-func (db *Redis) Publish(channel string, msg *PubSubMessage) {
-	data, err := json.Marshal(msg)
-	redisErrorHandler("Redis.Publish:marchal", err)
-	_, err = db.Do("PUBLISH", channel, data)
+func (db *Redis) Publish(channel string, data interface{}) {
+	_, err := db.Do("PUBLISH", channel, data)
 	redisErrorHandler("Redis.Publish:Do", err)
 	//fmt.Printf("Publish to %s: %s\n", channel, data)
 }
@@ -96,14 +68,14 @@ func (db *Redis) MutliExec(cmds RedisCommands) (reply interface{}, err error) {
 
 func (db *Redis) Run() {
 	method := "Redis.Run"
-	channels := []string{EventChannel, ChatChannel}
+	channels := db.handler.Channels()
 	fmt.Println(method, "begin:")
 
 	c := db.conns.Get()
 	defer c.Close()
 
 	psc := redis.PubSubConn{c}
-	for _, channel := range channels {
+	for channel, _ := range channels {
 		psc.Subscribe(channel)
 	}
 	fmt.Println(method, "ready!, subscribe to channels", channels)
@@ -112,12 +84,8 @@ func (db *Redis) Run() {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
 			//fmt.Printf("%s:message: %s: %s\n", method, v.Channel, v.Data)
-			switch v.Channel {
-			case EventChannel, ChatChannel:
-				msg := &PubSubMessage{}
-				err := json.Unmarshal(v.Data, msg)
-				redisErrorHandler("Redis.Run:json.Unmarshal", err)
-				db.handler.HandleMessage(v.Channel, msg)
+			if _, ok := channels[v.Channel]; ok {
+				db.handler.HandleMessage(v.Channel, v.Data)
 			}
 		case redis.Subscription:
 			fmt.Printf("%s:subscription: %s: %s %d\n", method, v.Channel, v.Kind, v.Count)
