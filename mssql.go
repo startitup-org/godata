@@ -63,15 +63,14 @@ func (db *MsSQL) Close() {
 	}
 }
 
-func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
+func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLog) {
 	//fmt.Printf("EXEC %s '%s'\n", spName, params)
 	tm0 := time.Now()
 	row := db.appDb.QueryRow("EXEC CallSp ?1, ?2", spName, params)
 	durationEx := time.Since(tm0).Seconds() * 1000 //in ms
 
 	//fmt.Println(row)
-	var result []byte
-	l := SpCallLog{
+	l = SpCallLog{
 		SpCallLogId: uuid.NewV4(),
 		SpName:      spName,
 		Params:      params,
@@ -86,7 +85,7 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 		//fmt.Println("l:", l)
 		go db.CallLogSp("LogSpCall", l)
 	}
-	return result, l
+	return
 }
 
 func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, errMsg string) {
