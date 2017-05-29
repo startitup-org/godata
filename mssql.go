@@ -89,19 +89,15 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 	return result, l
 }
 
-func (db *MsSQL) CallLogSp(sp string, l interface{}) {
+func (db *MsSQL) CallLogSp(sp string, l interface{}) (errCode int, errMsg string) {
 	lj, err := json.Marshal(l)
 	if err != nil {
 		fmt.Println(err)
 	}
 	//fmt.Printf("%s IN: %s\n", sp, lj)
-
-	var (
-		errCode int
-		errMsg  string
-	)
 	err = db.logsDb.QueryRow("EXEC "+sp+" ?", string(lj)).Scan(&errCode, &errMsg)
 	if err != nil {
 		fmt.Printf("%s RES: %s, %d, %s\n", sp, err, errCode, errMsg)
 	}
+	return
 }
