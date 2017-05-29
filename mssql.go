@@ -12,8 +12,9 @@ import (
 )
 
 type MsSQL struct {
-	appDb  *sql.DB
-	logsDb *sql.DB
+	appDb    *sql.DB
+	logsDb   *sql.DB
+	hostname string
 }
 
 type DbConns struct {
@@ -37,29 +38,6 @@ type SpCallLog struct {
 	CreatedDT      time.Time `json:"createdDT"`
 }
 
-type ApiAccessLog struct {
-	ApiAccessLogId uuid.UUID `json:"apiAccessLogId"`
-	ApiSessionId   uuid.UUID `json:"apiSessionId"`
-	Route          string    `json:"route"`
-	Source         string    `json:"source"`
-	UserId         uuid.UUID `json:"userId"`
-	IPAddress      string    `json:"ipAddress"`
-	UserAgent      string    `json:"userAgent"`
-	Method         string    `json:"method"`
-	Url            string    `json:"url"`
-	Headers        string    `json:"headers"`
-	Payload        string    `json:"payload"`
-	Response       string    `json:"response"`
-	ReasonPhrase   string    `json:"reasonPhrase"`
-	StatusCode     int       `json:"statusCode"`
-	Duration       float64   `json:"duration"`
-	Domain         string    `json:"domain"`
-	Server         string    `json:"server"`
-	CreatedDT      time.Time `json:"createdDT"`
-}
-
-var hostname string
-
 func NewMsSQL(c DbConns) (*MsSQL, error) {
 	appDb, err := sql.Open("mssql", c.AppConn)
 	if err != nil {
@@ -71,9 +49,9 @@ func NewMsSQL(c DbConns) (*MsSQL, error) {
 		fmt.Println("Cannot connect to logsDb: ", err.Error())
 	}
 
-	hostname, _ = os.Hostname()
+	hostname, _ := os.Hostname()
 
-	return &MsSQL{appDb, logsDb}, err
+	return &MsSQL{appDb, logsDb, hostname}, err
 }
 
 func (db *MsSQL) Close() {
@@ -98,7 +76,7 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 		SpName:      spName,
 		Params:      params,
 		DurationEx:  durationEx,
-		Server:      hostname,
+		Server:      db.hostname,
 		CreatedDT:   tm0.UTC(),
 	}
 	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
@@ -106,40 +84,24 @@ func (db *MsSQL) CallSp(spName string, params string) ([]byte, SpCallLog) {
 		fmt.Println("row.Scan error:", err)
 	} else {
 		//fmt.Println("l:", l)
-		go db.logSpCall(l)
+		go db.CallLogSp("LogSpCall", l)
 	}
 	return result, l
 }
 
-func (db *MsSQL) logSpCall(l SpCallLog) {
-	var errCode int
-	var errMsg string
-
+func (db *MsSQL) CallLogSp(sp string, l interface{}) {
 	lj, err := json.Marshal(l)
 	if err != nil {
 		fmt.Println(err)
 	}
-	//fmt.Printf("logSpCall IN: %s\n", lj)
+	//fmt.Printf("%s IN: %s\n", sp, lj)
 
-	err = db.logsDb.QueryRow("EXEC LogSpCall ?", string(lj)).Scan(&errCode, &errMsg)
+	var (
+		errCode int
+		errMsg  string
+	)
+	err = db.logsDb.QueryRow("EXEC "+sp+" ?", string(lj)).Scan(&errCode, &errMsg)
 	if err != nil {
-		fmt.Printf("logSpCall RES: %s, %d, %s\n", err, errCode, errMsg)
-	}
-}
-
-func (db *MsSQL) LogApiAccess(l ApiAccessLog) {
-	var errCode int
-	var errMsg string
-
-	l.Duration = time.Since(l.CreatedDT).Seconds() * 1000 //in ms
-	lj, err := json.Marshal(l)
-	if err != nil {
-		fmt.Println(err)
-	}
-	//fmt.Printf("LogApiAccess IN: %s\n", lj)
-
-	err = db.logsDb.QueryRow("EXEC LogApiAccess ?", string(lj)).Scan(&errCode, &errMsg)
-	if err != nil {
-		fmt.Printf("LogApiAccess RES: %s, %d, %s\n", err, errCode, errMsg)
+		fmt.Printf("%s RES: %s, %d, %s\n", sp, err, errCode, errMsg)
 	}
 }
