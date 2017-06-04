@@ -2,6 +2,7 @@ package godata
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -32,7 +33,7 @@ type Redis struct { //
 
 func NewRedis(h RedisMessageHandler, maxIdle int, address, password string) *Redis {
 	db := Redis{h, redisNewPool(maxIdle, address, password)}
-	fmt.Println("new Redis ready, conns", db.conns.ActiveCount())
+	log.Println("new Redis ready, conns", db.conns.ActiveCount())
 	return &db
 }
 
@@ -43,7 +44,7 @@ func (db *Redis) Conns() *redis.Pool {
 func (db *Redis) Publish(channel string, data interface{}) {
 	_, err := db.Do("PUBLISH", channel, data)
 	redisErrorHandler("Redis.Publish:Do", err)
-	//fmt.Printf("Publish to %s: %s\n", channel, data)
+	//log.Printf("Publish to %s: %s\n", channel, data)
 }
 
 func (db *Redis) Do(cmd string, args ...interface{}) (reply interface{}, err error) {
@@ -69,7 +70,7 @@ func (db *Redis) MutliExec(cmds RedisCommands) (reply interface{}, err error) {
 func (db *Redis) Run() {
 	method := "Redis.Run"
 	channels := db.handler.Channels()
-	fmt.Println(method, "begin:")
+	log.Println(method, "begin:")
 
 	c := db.conns.Get()
 	defer c.Close()
@@ -78,24 +79,24 @@ func (db *Redis) Run() {
 	for channel, _ := range channels {
 		psc.Subscribe(channel)
 	}
-	fmt.Println(method, "ready!, subscribe to channels", channels)
+	log.Println(method, "ready!, subscribe to channels", channels)
 
 	for {
 		switch v := psc.Receive().(type) {
 		case redis.Message:
-			//fmt.Printf("%s:message: %s: %s\n", method, v.Channel, v.Data)
+			//log.Printf("%s:message: %s: %s\n", method, v.Channel, v.Data)
 			if _, ok := channels[v.Channel]; ok {
 				db.handler.HandleMessage(v.Channel, v.Data)
 			}
 		case redis.Subscription:
-			fmt.Printf("%s:subscription: %s: %s %d\n", method, v.Channel, v.Kind, v.Count)
+			log.Printf("%s:subscription: %s: %s %d\n", method, v.Channel, v.Kind, v.Count)
 		case error:
-			fmt.Println(method, "got error:", v)
+			log.Println(method, "got error:", v)
 			return
 		}
 	}
 
-	fmt.Println(method, "end!")
+	log.Println(method, "end!")
 }
 
 func redisNewPool(maxIdle int, address, password string) *redis.Pool {

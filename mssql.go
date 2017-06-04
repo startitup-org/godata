@@ -3,7 +3,7 @@ package godata
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -41,12 +41,12 @@ type SpCallLog struct {
 func NewMsSQL(c DbConns) (*MsSQL, error) {
 	appDb, err := sql.Open("mssql", c.AppConn)
 	if err != nil {
-		fmt.Println("Cannot connect to appDb: ", err.Error())
+		log.Println("Cannot connect to appDb: ", err.Error())
 	}
 
 	logsDb, err := sql.Open("mssql", c.LogsConn)
 	if err != nil {
-		fmt.Println("Cannot connect to logsDb: ", err.Error())
+		log.Println("Cannot connect to logsDb: ", err.Error())
 	}
 
 	hostname, _ := os.Hostname()
@@ -64,12 +64,12 @@ func (db *MsSQL) Close() {
 }
 
 func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLog) {
-	//fmt.Printf("EXEC %s '%s'\n", spName, params)
+	//log.Printf("EXEC %s '%s'\n", spName, params)
 	tm0 := time.Now()
 	row := db.appDb.QueryRow("EXEC CallSp ?1, ?2", spName, params)
 	durationEx := time.Since(tm0).Seconds() * 1000 //in ms
 
-	//fmt.Println(row)
+	//log.Println(row)
 	l = SpCallLog{
 		SpCallLogId: uuid.NewV4(),
 		SpName:      spName,
@@ -80,9 +80,9 @@ func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLo
 	}
 	err := row.Scan(&l.DbName, &result, &l.Duration, &l.ErrorCode, &l.ErrorMessage, &l.ExErrorCode, &l.ExErrorMessage)
 	if err != nil {
-		fmt.Println("row.Scan error:", err)
+		log.Println("row.Scan error:", err)
 	} else {
-		//fmt.Println("l:", l)
+		//log.Println("l:", l)
 		go db.CallLogSp("LogSpCall", l)
 	}
 	return
@@ -91,13 +91,13 @@ func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLo
 func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, errMsg string) {
 	lj, err := json.Marshal(l)
 	if err != nil {
-		fmt.Printf("%s json.Marshal %s\n", sp, err)
+		log.Printf("%s json.Marshal %s\n", sp, err)
 		return
 	}
-	//fmt.Printf("%s IN: %s\n", sp, lj)
+	//log.Printf("%s IN: %s\n", sp, lj)
 	err = db.logsDb.QueryRow("EXEC "+sp+" ?", string(lj)).Scan(&errCode, &errMsg)
 	if err != nil {
-		fmt.Printf("%s RES: %s, %d, %s\n", sp, err, errCode, errMsg)
+		log.Printf("%s RES: %s, %d, %s\n", sp, err, errCode, errMsg)
 	}
 	return
 }
