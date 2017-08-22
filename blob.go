@@ -1,8 +1,10 @@
 package godata
 
 import (
+	"io"
 	"log"
 	"mime/multipart"
+	"net/http"
 
 	"github.com/startitup-org/azure-sdk-for-go/storage"
 )
@@ -28,14 +30,14 @@ func NewBlobClient(acc, key, cn string) (BlobClient, error) {
 	return bc, nil
 }
 
-func (bc *BlobClient) Upload(n string, f multipart.File) (string, error) {
+func (bc *BlobClient) Upload(fn string, f multipart.File) (string, error) {
 	c := bc.GetContainerReference(bc.container)
 	created, err := c.CreateIfNotExists(nil)
 	if err != nil {
 		log.Println("c.CreateIfNotExists", created, err, c)
 		return "", err
 	}
-	b := c.GetBlobReference(n)
+	b := c.GetBlobReference(fn)
 	sz, err := f.Seek(0, 2)
 	if err != nil {
 		log.Println("f.Seek(0, 2)", sz, err)
@@ -53,6 +55,15 @@ func (bc *BlobClient) Upload(n string, f multipart.File) (string, error) {
 	//	Timeout: 60,
 	//}
 	//log.Println("c.GetBlobReference", sz, sz2, b.Properties)
+	// Only the first 512 bytes are used to sniff the content type.
+	buffer := make([]byte, 512)
+	n, err := f.Read(buffer)
+	if err != nil && err != io.EOF {
+		log.Println("f.Read(buffer)", n, err)
+		return "", err
+	}
+	b.Properties.ContentType = http.DetectContentType(buffer[:n])
+	f.Seek(0, 0)
 
 	err = b.CreateBlockBlobFromReader(f, nil)
 	if err != nil {
