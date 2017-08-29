@@ -35,7 +35,7 @@ type SpCallLog struct {
 	ExErrorCode    int       `json:"exErrorCode"`
 	ExErrorMessage string    `json:"exErrorMessage"`
 	Server         string    `json:"server"`
-	CreatedDT      time.Time `json:"createdDT"`
+	CreatedDT      time.Time `json:"createdDt"`
 }
 
 func NewMsSQL(c DbConns) (*MsSQL, error) {

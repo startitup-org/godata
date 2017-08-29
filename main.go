@@ -2,4 +2,4 @@
 // for staritup applications
 package godata
 
-var Version string = "2.0.6"
+var Version string = "2.0.7"
