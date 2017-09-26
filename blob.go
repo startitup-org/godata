@@ -30,23 +30,23 @@ func NewBlobClient(acc, key, cn string) (BlobClient, error) {
 	return bc, nil
 }
 
-func (bc *BlobClient) Upload(fn string, f multipart.File) (string, error) {
+func (bc *BlobClient) Upload(bn string, f multipart.File) (*storage.Blob, error) {
 	c := bc.GetContainerReference(bc.container)
 	created, err := c.CreateIfNotExists(nil)
 	if err != nil {
 		log.Println("c.CreateIfNotExists", created, err, c)
-		return "", err
+		return nil, err
 	}
-	b := c.GetBlobReference(fn)
+	b := c.GetBlobReference(bn)
 	sz, err := f.Seek(0, 2)
 	if err != nil {
 		log.Println("f.Seek(0, 2)", sz, err)
-		return "", err
+		return nil, err
 	}
 	sz2, err := f.Seek(0, 0)
 	if err != nil {
 		log.Println("f.Seek(0, 0)", sz2, err)
-		return "", err
+		return nil, err
 	}
 	b.Properties.ContentLength = sz
 	//b.Properties.ContentType = "image/jpeg"
@@ -60,7 +60,7 @@ func (bc *BlobClient) Upload(fn string, f multipart.File) (string, error) {
 	n, err := f.Read(buffer)
 	if err != nil && err != io.EOF {
 		log.Println("f.Read(buffer)", n, err)
-		return "", err
+		return nil, err
 	}
 	b.Properties.ContentType = http.DetectContentType(buffer[:n])
 	f.Seek(0, 0)
@@ -68,7 +68,7 @@ func (bc *BlobClient) Upload(fn string, f multipart.File) (string, error) {
 	err = b.CreateBlockBlobFromReader(f, nil)
 	if err != nil {
 		log.Println("b.CreateBlockBlobFromReader", b.Name, b.Properties, err)
-		return "", err
+		return nil, err
 	}
-	return b.Name, err
+	return b, err
 }
