@@ -37,6 +37,8 @@ func (bc *BlobClient) Upload(bn string, f multipart.File) (*storage.Blob, error)
 		log.Println("c.CreateIfNotExists", created, err, c)
 		return nil, err
 	}
+	c.SetPermissions(storage.ContainerPermissions{AccessType: storage.ContainerAccessTypeBlob}, nil)
+
 	b := c.GetBlobReference(bn)
 	sz, err := f.Seek(0, 2)
 	if err != nil {
