@@ -10,36 +10,33 @@ import (
 )
 
 type BlobClient struct {
-	storage.BlobStorageClient
-	container string
+	*storage.BlobStorageClient
+	Container *storage.Container
 }
 
-func NewBlobClient(acc, key, cn string) (BlobClient, error) {
+func NewBlobClient(acc, key, cn string) (*BlobClient, error) {
 	c, err := storage.NewBasicClient(acc, key)
 	if err != nil {
 		log.Println("storage.NewBasicClient", err)
-		return BlobClient{}, err
+		return &BlobClient{}, err
 	}
-	//c.UseSharedKeyLite = true
-	bc := BlobClient{
-		c.GetBlobService(),
-		cn,
-	}
-	//log.Println("storage.NewBasicClient", bc, c, err)
 
-	return bc, nil
+	bs := c.GetBlobService()
+	bc := bs.GetContainerReference(cn)
+	created, err := bc.CreateIfNotExists(nil)
+	if err != nil {
+		log.Println("c.CreateIfNotExists", created, err, bc)
+		return nil, err
+	}
+	bc.SetPermissions(storage.ContainerPermissions{AccessType: storage.ContainerAccessTypeBlob}, nil)
+
+	return &BlobClient{
+		&bs,
+		bc,
+	}, nil
 }
 
 func (bc *BlobClient) Upload(bn string, f multipart.File) (*storage.Blob, error) {
-	c := bc.GetContainerReference(bc.container)
-	created, err := c.CreateIfNotExists(nil)
-	if err != nil {
-		log.Println("c.CreateIfNotExists", created, err, c)
-		return nil, err
-	}
-	c.SetPermissions(storage.ContainerPermissions{AccessType: storage.ContainerAccessTypeBlob}, nil)
-
-	b := c.GetBlobReference(bn)
 	sz, err := f.Seek(0, 2)
 	if err != nil {
 		log.Println("f.Seek(0, 2)", sz, err)
@@ -50,13 +47,7 @@ func (bc *BlobClient) Upload(bn string, f multipart.File) (*storage.Blob, error)
 		log.Println("f.Seek(0, 0)", sz2, err)
 		return nil, err
 	}
-	b.Properties.ContentLength = sz
-	//b.Properties.ContentType = "image/jpeg"
-	//op := &storage.PutBlobOptions{
-	//	LeaseID: base64.StdEncoding.EncodeToString([]byte(n)),
-	//	Timeout: 60,
-	//}
-	//log.Println("c.GetBlobReference", sz, sz2, b.Properties)
+
 	// Only the first 512 bytes are used to sniff the content type.
 	buffer := make([]byte, 512)
 	n, err := f.Read(buffer)
@@ -64,8 +55,12 @@ func (bc *BlobClient) Upload(bn string, f multipart.File) (*storage.Blob, error)
 		log.Println("f.Read(buffer)", n, err)
 		return nil, err
 	}
-	b.Properties.ContentType = http.DetectContentType(buffer[:n])
 	f.Seek(0, 0)
+
+	b := bc.Container.GetBlobReference(bn)
+	b.Properties.ContentType = http.DetectContentType(buffer[:n])
+	b.Properties.ContentLength = sz
+	//log.Println("c.GetBlobReference", sz, sz2, b.Properties)
 
 	err = b.CreateBlockBlobFromReader(f, nil)
 	if err != nil {
