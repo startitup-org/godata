@@ -15,6 +15,8 @@ type MsSQL struct {
 	appDb    *sql.DB
 	logsDb   *sql.DB
 	hostname string
+	appSem   chan struct{}
+	logsSem  chan struct{}
 }
 
 type DbConns struct {
@@ -38,6 +40,8 @@ type SpCallLog struct {
 	CreatedDT      time.Time `json:"createdDt"`
 }
 
+var DbSem = 2
+
 func NewMsSQL(c DbConns) (*MsSQL, error) {
 	appDb, err := sql.Open("mssql", c.AppConn)
 	if err != nil {
@@ -51,7 +55,10 @@ func NewMsSQL(c DbConns) (*MsSQL, error) {
 
 	hostname, _ := os.Hostname()
 
-	return &MsSQL{appDb, logsDb, hostname}, err
+	appSem := make(chan struct{}, DbSem)
+	logsSem := make(chan struct{}, DbSem)
+
+	return &MsSQL{appDb, logsDb, hostname, appSem, logsSem}, err
 }
 
 func (db *MsSQL) Close() {
@@ -64,6 +71,7 @@ func (db *MsSQL) Close() {
 }
 
 func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLog) {
+	db.appSem <- struct{}{}
 	//log.Printf("EXEC %s '%s'\n", spName, params)
 	tm0 := time.Now()
 	row := db.appDb.QueryRow("EXEC CallSp ?1, ?2", spName, params)
@@ -85,10 +93,12 @@ func (db *MsSQL) CallSp(spName string, params string) (result []byte, l SpCallLo
 		//log.Println("l:", l)
 		go db.CallLogSp("LogSpCall", l)
 	}
+	<-db.appSem
 	return
 }
 
 func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, errMsg string) {
+	db.logsSem <- struct{}{}
 	lj, err := json.Marshal(l)
 	if err != nil {
 		log.Printf("%s json.Marshal %s\n", sp, err)
@@ -99,5 +109,6 @@ func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, er
 	if err != nil {
 		log.Printf("%s RES: %s, %d, %s\n", sp, err, errCode, errMsg)
 	}
+	<-db.logsSem
 	return
 }
