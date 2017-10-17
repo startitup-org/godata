@@ -112,3 +112,17 @@ func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, er
 	<-db.logsSem
 	return
 }
+
+func (db *MsSQL) Ping() error {
+	if err := db.appDb.Ping(); err != nil {
+		log.Println("MsSQL:Ping appDb error", err)
+		return err
+	}
+
+	if err := db.logsDb.Ping(); err != nil {
+		log.Println("MsSQL:Ping logDb error", err)
+		return err
+	}
+
+	return nil
+}
