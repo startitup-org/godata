@@ -3,6 +3,7 @@ package godata
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -113,16 +114,17 @@ func (db *MsSQL) CallLogSp(sp string, l interface{}) (err error, errCode int, er
 	return
 }
 
-func (db *MsSQL) Ping() error {
+func (db *MsSQL) Ping() []error {
+	errs := []error{}
 	if err := db.appDb.Ping(); err != nil {
 		log.Println("MsSQL:Ping appDb error", err)
-		return err
+		errs = append(errs, fmt.Errorf("MsSQL:Ping appDb error [%+v]", err))
 	}
 
 	if err := db.logsDb.Ping(); err != nil {
 		log.Println("MsSQL:Ping logDb error", err)
-		return err
+		errs = append(errs, fmt.Errorf("MsSQL:Ping logDb error [%+v]", err))
 	}
 
-	return nil
+	return errs
 }
